@@ -4414,10 +4414,36 @@ zink_context_create(struct pipe_screen *pscreen, void *priv, unsigned flags)
    if (screen->info.dynamic_state2_feats.extendedDynamicState2PatchControlPoints)
       VKCTX(CmdSetPatchControlPointsEXT)(ctx->batch.state->cmdbuf, 1);
 
-   if (!(flags & PIPE_CONTEXT_PREFER_THREADED) || flags & PIPE_CONTEXT_COMPUTE_ONLY) {
-      return &ctx->base;
+   /* ZINK_CONTEXT_MODE 
+    * Values:
+    * auto - automatically select base or threaded context
+    * force - force base context selection
+    */
+   const char *context_mode = getenv("ZINK_CONTEXT_MODE");
+
+// force base context selection
+   if (context_mode) {
+      if (!strcmp(context_mode, "force")) {
+         zink_xlib_context = &ctx->base;
+         mesa_loge("ZINK: force base context selection");
+         mesa_loge("ZINK: base context %u created", (unsigned)zink_xlib_context);
+
+         return &ctx->base;
+      }
    }
 
+// automatically select base or threaded context
+   if (context_mode) {
+      if (!strcmp(context_mode, "auto")) {
+         if (!(flags & PIPE_CONTEXT_PREFER_THREADED) || flags & PIPE_CONTEXT_COMPUTE_ONLY) {
+            zink_xlib_context = &ctx->base;
+            mesa_loge("ZINK: automatically select base or threaded context");
+            mesa_loge("ZINK: base context %u created", (unsigned)zink_xlib_context);
+
+            return &ctx->base;
+         }
+      }
+   }
    struct threaded_context *tc = (struct threaded_context*)threaded_context_create(&ctx->base, &screen->transfer_pool,
                                                      zink_context_replace_buffer_storage,
                                                      &(struct threaded_context_options){
@@ -4434,6 +4460,7 @@ zink_context_create(struct pipe_screen *pscreen, void *priv, unsigned flags)
    }
 
    zink_xlib_context = (struct pipe_context*)tc;
+   mesa_loge("ZINK: threaded context %u created", (unsigned)zink_xlib_context);
 
    return (struct pipe_context*)tc;
 
