@@ -4415,35 +4415,40 @@ zink_context_create(struct pipe_screen *pscreen, void *priv, unsigned flags)
       VKCTX(CmdSetPatchControlPointsEXT)(ctx->batch.state->cmdbuf, 1);
 
    /* ZINK_CONTEXT_MODE 
-    * Values:
+    * Options:
+    * threaded - force threaded context selection (default option)
+    * base - force base context selection
     * auto - automatically select base or threaded context
-    * force - force base context selection
     */
-   const char *context_mode = getenv("ZINK_CONTEXT_MODE");
+   const char *zink_context_string = getenv("ZINK_CONTEXT_MODE");
+   enum zink_context_modes context_mode;
 
-// force base context selection
-   if (context_mode) {
-      if (!strcmp(context_mode, "force")) {
+   if (!zink_context_string) {
+      printf("ZINK: force threaded context selection \n");
+      context_mode = ZINK_CONTEXT_THREADED;
+   } else {
+      if (!strcmp(zink_context_string, "base")) {
+         context_mode = ZINK_CONTEXT_BASE;
+         printf("ZINK: force base context selection \n");
+      }
+      else if (!strcmp(zink_context_string, "auto")) {
+         context_mode = ZINK_CONTEXT_AUTO;
+         printf("ZINK: automatically select base or threaded context \n");
+      }
+      else {
+         printf("ZINK: force threaded context selection \n");
+         context_mode = ZINK_CONTEXT_THREADED;
+      }
+   }
+
+   if (!(flags & PIPE_CONTEXT_PREFER_THREADED) || flags & PIPE_CONTEXT_COMPUTE_ONLY) {
+      if (context_mode == ZINK_CONTEXT_BASE || context_mode == ZINK_CONTEXT_AUTO) {
          zink_xlib_context = &ctx->base;
-         mesa_loge("ZINK: force base context selection");
-         mesa_loge("ZINK: base context %u created", (unsigned)zink_xlib_context);
-
-         return &ctx->base;
+         printf("ZINK: base context %u created \n", (unsigned)zink_xlib_context);
       }
+      return &ctx->base;
    }
 
-// automatically select base or threaded context
-   if (context_mode) {
-      if (!strcmp(context_mode, "auto")) {
-         if (!(flags & PIPE_CONTEXT_PREFER_THREADED) || flags & PIPE_CONTEXT_COMPUTE_ONLY) {
-            zink_xlib_context = &ctx->base;
-            mesa_loge("ZINK: automatically select base or threaded context");
-            mesa_loge("ZINK: base context %u created", (unsigned)zink_xlib_context);
-
-            return &ctx->base;
-         }
-      }
-   }
    struct threaded_context *tc = (struct threaded_context*)threaded_context_create(&ctx->base, &screen->transfer_pool,
                                                      zink_context_replace_buffer_storage,
                                                      &(struct threaded_context_options){
@@ -4459,8 +4464,10 @@ zink_context_create(struct pipe_screen *pscreen, void *priv, unsigned flags)
       ctx->base.set_context_param = zink_set_context_param;
    }
 
-   zink_xlib_context = (struct pipe_context*)tc;
-   mesa_loge("ZINK: threaded context %u created", (unsigned)zink_xlib_context);
+   if (context_mode == ZINK_CONTEXT_THREADED || context_mode == ZINK_CONTEXT_AUTO) {
+      printf("ZINK: threaded context %u created \n", (unsigned)zink_xlib_context);
+      zink_xlib_context = (struct pipe_context*)tc; 
+   }
 
    return (struct pipe_context*)tc;
 
