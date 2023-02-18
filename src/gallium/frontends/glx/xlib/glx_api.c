@@ -1392,20 +1392,40 @@ glXQueryExtension( Display *dpy, int *errorBase, int *eventBase )
 PUBLIC void
 glXDestroyContext( Display *dpy, GLXContext ctx )
 {
-   //if (ctx) {
-      //GLXContext glxCtx = ctx;
-   GLXContext glxCtx = ctx;
+   const char *zink_context_string = getenv("ZINK_CONTEXT_MODE");
 
-   if (glxCtx == NULL || glxCtx->xid == None)
-      return;
+   if (!zink_context_string) {
+      if (ctx) {
+         GLXContext glxCtx = ctx;
 
-   if (ctx->currentDpy) {
-      ctx->xid = None;
+         (void) dpy;
+         XMesaDestroyContext( glxCtx->xmesaContext );
+         XMesaGarbageCollect();
+         free(glxCtx);
+      }
+   } else if ((!strcmp(zink_context_string, "base")) || (!strcmp(zink_context_string, "auto"))) {
+      GLXContext glxCtx = ctx;
+
+      if (glxCtx == NULL || glxCtx->xid == None)
+         return;
+
+      if (ctx->currentDpy) {
+         ctx->xid = None;
+      } else {
+         (void) dpy;
+         XMesaDestroyContext( glxCtx->xmesaContext );
+         XMesaGarbageCollect();
+         free(glxCtx);
+      }
    } else {
-      (void) dpy;
-      XMesaDestroyContext( glxCtx->xmesaContext );
-      XMesaGarbageCollect();
-      free(glxCtx);
+      if (ctx) {
+         GLXContext glxCtx = ctx;
+
+         (void) dpy;
+         XMesaDestroyContext( glxCtx->xmesaContext );
+         XMesaGarbageCollect();
+         free(glxCtx);
+      }
    }
 }
 
